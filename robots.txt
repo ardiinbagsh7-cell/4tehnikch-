@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ardiinbagsh7-cell.github.io/4tehnikch/sitemap.xml
