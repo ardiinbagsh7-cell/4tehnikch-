@@ -579,12 +579,19 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <div id="studentLoginForm" class="login-card">
       <h2>🎓 Оюутан нэвтрэх</h2>
       <div class="form-group">
-        <label>Овог</label>
-        <input type="text" id="sLastName" placeholder="Жишээ: Батбаяр" autocomplete="family-name" onkeydown="if(event.key==='Enter')studentLogin()"/>
+        <label>Анги</label>
+        <select id="sMajor">
+          <option value="">-- Ангиа сонгоно уу --</option>
+          <option value="atm">АТМ</option>
+          <option value="haat">ХААТ</option>
+          <option value="cook">Тогооч</option>
+          <option value="elec">Цахилгаан</option>
+        </select>
       </div>
       <div class="form-group">
-        <label>Нэр</label>
-        <input type="text" id="sFirstName" placeholder="Жишээ: Болд" autocomplete="given-name" onkeydown="if(event.key==='Enter')studentLogin()"/>
+        <label>Овог нэр</label>
+        <input type="text" id="sFullName" placeholder="Жишээ: Батбаяр Болд" autocomplete="name" onkeydown="if(event.key==='Enter')studentLogin()"/>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:0.35rem;">Овог, нэрээ дунд нь зай аваад бичнэ</div>
         <div class="error-msg" id="sErr">Овог нэр буруу эсвэл олдсонгүй</div>
       </div>
       <div class="form-group" id="sPickWrap" style="display:none;"></div>
@@ -698,7 +705,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
               <tr>
                 <th>#</th>
                 <th>Овог нэр</th>
-                <th>Нэр</th>
                 <th>Анги / Бүлэг</th>
                 <th>Ирц %</th>
                 <th>Дундаж оноо</th>
@@ -971,11 +977,8 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <h2>➕ Оюутан нэмэх</h2>
     <div class="form-group">
       <label>Овог нэр</label>
-      <input type="text" id="newLastName" placeholder="Батбаяр"/>
-    </div>
-    <div class="form-group">
-      <label>Нэр</label>
-      <input type="text" id="newFirstName" placeholder="Болд"/>
+      <textarea id="newFullName" rows="3" placeholder="Батбаяр Болд&#10;Дорж Сараа"></textarea>
+      <div style="font-size:0.75rem;color:var(--muted);margin-top:0.35rem;">Овог, нэрийг зайтай бичнэ. Олон оюутныг зэрэг нэмэх бол нэг мөрөнд нэг оюутан бичнэ.</div>
     </div>
     <div class="form-group">
       <label>Анги (мэргэжил)</label>
@@ -1431,12 +1434,27 @@ function studentLogin(pickId){
   if(pickId){
     found = DB.students.find(s=>s.id===pickId);
   } else {
-    const ln = normName(document.getElementById('sLastName').value);
-    const fn = normName(document.getElementById('sFirstName').value);
+    const major = document.getElementById('sMajor').value;
+    const q = normName(document.getElementById('sFullName').value);
     pickWrap.style.display='none'; pickWrap.innerHTML='';
-    if(!ln||!fn){ errEl.style.display='block'; errEl.textContent='Овог, нэрээ хоёуланг нь бичнэ үү'; return; }
-    const matches = DB.students.filter(s=>normName(s.lastName)===ln && normName(s.firstName)===fn);
-    if(!matches.length){ errEl.style.display='block'; errEl.textContent='Овог нэр олдсонгүй. Үсгийн алдаа шалгаад, олдохгүй бол багшдаа хандана уу.'; return; }
+    if(!major){ errEl.style.display='block'; errEl.textContent='Ангиа сонгоно уу'; return; }
+    if(!q){ errEl.style.display='block'; errEl.textContent='Овог нэрээ бичнэ үү'; return; }
+    // Овог+нэр, нэр+овог, эсвэл багш бүтэн нэрийг нэг талбарт оруулсан тохиолдлыг бүгдийг таньна
+    const keysOf = s => {
+      const ln = normName(s.lastName), fn = normName(s.firstName);
+      const k = [ (ln+' '+fn).trim(), (fn+' '+ln).trim() ];
+      if(ln.includes(' ')) k.push(ln);
+      if(fn.includes(' ')) k.push(fn);
+      return k;
+    };
+    const matches = DB.students.filter(s=>majorOf(s)===major && keysOf(s).includes(q));
+    if(!matches.length){
+      errEl.style.display='block';
+      errEl.textContent = q.includes(' ')
+        ? majorInfo(major).name+' ангид энэ нэр олдсонгүй. Ангиа зөв сонгосон, үсгийн алдаагүй эсэхээ шалгана уу. Олдохгүй бол багшдаа хандана уу.'
+        : 'Овог, нэрээ хоёуланг нь бичнэ үү (жишээ: Батбаяр Болд)';
+      return;
+    }
     if(matches.length>1){
       errEl.style.display='none';
       pickWrap.innerHTML = '<label>Ижил нэртэй оюутан олон байна — өөрийгөө сонгоно уу</label>' +
@@ -1489,8 +1507,8 @@ function logout(){
   currentUser=null; currentRole=null;
   clearSession();
   showPage('loginPage');
-  document.getElementById('sLastName').value='';
-  document.getElementById('sFirstName').value='';
+  document.getElementById('sFullName').value='';
+  document.getElementById('sMajor').value='';
   const pw = document.getElementById('sPickWrap'); if(pw){ pw.style.display='none'; pw.innerHTML=''; }
 }
 function showPage(id){
@@ -1651,14 +1669,13 @@ function renderStudentsTable(filterCourse, filterGroup){
   }
 
   const tbody = document.getElementById('studentsTable');
-  if(!students.length){ tbody.innerHTML=`<tr><td colspan="7" style="padding:2rem;text-align:center;color:var(--muted);">${majorInfo(currentMajor).name} ангид оюутан бүртгэгдээгүй байна. "Оюутан нэмэх" товчоор бүртгэнэ үү.</td></tr>`; return; }
+  if(!students.length){ tbody.innerHTML=`<tr><td colspan="6" style="padding:2rem;text-align:center;color:var(--muted);">${majorInfo(currentMajor).name} ангид оюутан бүртгэгдээгүй байна. "Оюутан нэмэх" товчоор бүртгэнэ үү.</td></tr>`; return; }
   tbody.innerHTML = students.map((s,i)=>{
     const attPct = calcAttPct(s.id);
     const avgScore = calcAvgScore(s.id);
     return `<tr>
       <td style="color:var(--muted);">${i+1}</td>
-      <td><strong>${s.lastName}</strong></td>
-      <td>${s.firstName}</td>
+      <td><strong>${s.lastName}</strong> ${s.firstName}</td>
       <td>${majorBadge(majorOf(s))} <span class="badge" style="background:rgba(139,92,246,0.15);color:#a78bfa;">${s.classGroup||'-'}</span>
         <select onchange="changeStudentMajor(${s.id},this.value)" title="Мэргэжил солих" style="margin-left:0.3rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.75rem;padding:0.15rem 0.3rem;">
           ${MAJORS.map(m=>`<option value="${m.id}" ${majorOf(s)===m.id?'selected':''}>${m.name}</option>`).join('')}</select></td>
@@ -1706,18 +1723,26 @@ function changeStudentMajor(id, major){
   st.major = major; saveDB(); renderStudentsTable();
 }
 function addStudent(){
-  const ln = document.getElementById('newLastName').value.trim();
-  const fn = document.getElementById('newFirstName').value.trim();
+  const lines = document.getElementById('newFullName').value.split('\n').map(x=>x.trim().replace(/\s+/g,' ')).filter(Boolean);
   const c = parseInt(document.getElementById('newCourse').value);
   const cg = (document.getElementById('newClassGroup').value||'').trim();
   const major = (currentUser && currentUser.major) || document.getElementById('newMajor').value || currentMajor;
-  if(!ln||!fn) return alert('Нэр бүрэн оруулна уу!');
-  if(DB.students.some(s=>majorOf(s)===major && normName(s.lastName)===normName(ln) && normName(s.firstName)===normName(fn)))
-    return alert('Энэ оюутан энэ ангид аль хэдийн бүртгэлтэй байна.');
-  DB.students.push({id:DB.nextStudentId++,lastName:ln,firstName:fn,course:c,classGroup:cg,major});
-  saveDB(); closeModal('addStudentModal');
-  document.getElementById('newLastName').value='';
-  document.getElementById('newFirstName').value='';
+  if(!lines.length) return alert('Оюутны овог нэрийг бичнэ үү!');
+  const bad = lines.filter(l=>!l.includes(' '));
+  if(bad.length) return alert('Овог, нэрийг хоёуланг нь зайтай бичнэ үү (жишээ: Батбаяр Болд).\nДутуу мөр: ' + bad.join(', '));
+  let added = 0; const dup = [];
+  lines.forEach(l=>{
+    const i = l.indexOf(' ');
+    const ln = l.slice(0,i), fn = l.slice(i+1);
+    if(DB.students.some(s=>majorOf(s)===major && normName(s.lastName)===normName(ln) && normName(s.firstName)===normName(fn))){ dup.push(l); return; }
+    DB.students.push({id:DB.nextStudentId++,lastName:ln,firstName:fn,course:c,classGroup:cg,major});
+    added++;
+  });
+  if(added) saveDB();
+  if(dup.length) alert(added+' оюутан нэмэгдлээ. Дараах нь энэ ангид аль хэдийн бүртгэлтэй: ' + dup.join(', '));
+  if(!added) return;
+  closeModal('addStudentModal');
+  document.getElementById('newFullName').value='';
   document.getElementById('newClassGroup').value='';
   renderStudentsTable();
 }
